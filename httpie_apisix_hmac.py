@@ -14,7 +14,7 @@ try:
 except ImportError:
     from urllib.parse import urlparse
 
-__version__ = "0.3.0"
+__version__ = "0.1.0"
 __author__ = "Zhao Jin"
 __licence__ = "MIT"
 
@@ -64,16 +64,22 @@ class ApisixHmacAuth:
             value = r.headers.get(key)
             if not value:
                 value = ""
-            value = str(value, encoding="utf8")
+            if isinstance(value, bytes):
+                value = str(value, encoding="utf8")
             string_to_sign += f"{key}:{value}\n"
 
         to_be_sign = bytes(string_to_sign, "utf8")
 
-        hash = hmac.new(self.secret_key, to_be_sign, hashlib.sha256)
+        if self.alg == "hmac-sha1":
+            hash_alg = hashlib.sha1
+        else:
+            hash_alg = hashlib.sha256
+
+        hash = hmac.new(self.secret_key, to_be_sign, hash_alg)
         signature = base64.b64encode(hash.digest())
 
         r.headers["X-HMAC-SIGNATURE"] = signature
-        r.headers["X-HMAC-ALGORITHM"] = "hmac-sha256"
+        r.headers["X-HMAC-ALGORITHM"] = self.alg
         r.headers["X-HMAC-ACCESS-KEY"] = self.access_key
         r.headers["X-HMAC-SIGNED-HEADERS"] = self.signed_headers
 
