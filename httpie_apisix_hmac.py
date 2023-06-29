@@ -10,13 +10,54 @@ import os
 from httpie.plugins import AuthPlugin
 
 try:
-    from urlparse import urlparse
+    from urlparse import urlparse, parse_qs, quote
 except ImportError:
-    from urllib.parse import urlparse
+    from urllib.parse import urlparse, parse_qs, quote
+
+import itertools
 
 __version__ = "0.1.0"
 __author__ = "Zhao Jin"
 __licence__ = "MIT"
+
+
+def _uri_encode(key: str, values: list[str]) -> list[str]:
+    """
+    encode multiple values
+    Args:
+        key: key of query param
+        values: values of query param
+    Returns:
+        query string
+    """
+    if not values or (len(values) == 1 and values[0] == ""):
+        return [f"{key}="]
+
+    return [f"{key}={quote(v)}" for v in values]
+    # list(map(lambda v: key + "=" + v, map(lambda x: quote(x), values)))
+
+
+def _build_canonical_query_string(query: str) -> str:
+    """
+    build hmac canonical query string
+
+    Parameter:
+        query: query string
+
+    Returns:
+        canonical query_string to be sign
+    """
+    query_dict = parse_qs(query, keep_blank_values=True)
+
+    sorted_keys = sorted(query_dict.keys())
+
+    qs = [_uri_encode(k, query_dict[k]) for k in sorted_keys]
+
+    items = itertools.chain.from_iterable(qs)
+
+    _canonical_query_string = "&".join(items)
+
+    return _canonical_query_string
 
 
 class ApisixHmacAuth:
@@ -48,8 +89,7 @@ class ApisixHmacAuth:
         query = ""
 
         if url.query:
-            query = url.query
-        headers = self.signed_headers.split(";")
+            query = _build_canonical_query_string(url.query)
 
         string_to_sign = f"""{method}
 {path}
@@ -91,7 +131,7 @@ class ApisixHmacAuthPlugin(AuthPlugin):
     auth_type = "apisix-hmac-auth"
     description = "Sign requests using the Apisix HMCA authentication method"
 
-    def get_auth(self, username:str, password:str ):
+    def get_auth(self, username: str, password: str):
         signed_headers = os.environ.get(
             "HMAC_SIGNED_HEADERS", "User-Agent;Content-Type"
         )
