@@ -101,9 +101,13 @@ class ApisixHmacAuth:
         headers = self.signed_headers.split(";")
 
         for key in headers:
-            value = r.headers.get(key)
+            lk = key.lower()
+            value = r.headers.get(lk)
             if not value:
                 value = ""
+                if lk == "host":
+                  value = url.hostname
+
             if isinstance(value, bytes):
                 value = str(value, encoding="utf8")
             string_to_sign += f"{key}:{value}\n"
